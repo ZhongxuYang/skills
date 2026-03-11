@@ -6,10 +6,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/../identities.json"
 
 usage() {
-  cat <<EOF
+  cat <<EOF_USAGE
 Usage: ./add-user.sh <sender_id> [channel]
 If channel is omitted, the sender is added to global_allowlist.
-EOF
+EOF_USAGE
 }
 
 if [[ $# -lt 1 ]]; then
@@ -25,26 +25,34 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
   exit 1
 fi
 
-if ! command -v jq >/dev/null 2>&1; then
-  echo "jq is required for add-user.sh" >&2
-  exit 1
-fi
+python3 - "${CONFIG_FILE}" "${SENDER_ID}" "${CHANNEL}" <<'PY'
+import json
+import sys
+from pathlib import Path
 
-TMP_FILE="$(mktemp)"
+config_path = Path(sys.argv[1])
+sender = sys.argv[2]
+channel = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else None
 
-if [[ -n "${CHANNEL}" ]]; then
-  jq --arg channel "${CHANNEL}" --arg sender "${SENDER_ID}" '
-    .channels = (.channels // {}) |
-    .channels[$channel] = (.channels[$channel] // {}) |
-    .channels[$channel].allowlist = ((.channels[$channel].allowlist // []) + [$sender] | unique) |
-    .global_allowlist = (.global_allowlist // [])
-  ' "${CONFIG_FILE}" > "${TMP_FILE}"
-else
-  jq --arg sender "${SENDER_ID}" '
-    .global_allowlist = ((.global_allowlist // []) + [$sender] | unique) |
-    .channels = (.channels // {})
-  ' "${CONFIG_FILE}" > "${TMP_FILE}"
-fi
+try:
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+except Exception as exc:
+    print(f"Invalid JSON in {config_path}: {exc}", file=sys.stderr)
+    sys.exit(1)
 
-mv "${TMP_FILE}" "${CONFIG_FILE}"
+channels = data.setdefault("channels", {})
+
+if channel:
+    ch = channels.setdefault(channel, {"master_id": "", "allowlist": []})
+    allowlist = ch.setdefault("allowlist", [])
+    if sender not in allowlist:
+        allowlist.append(sender)
+else:
+    global_allowlist = data.setdefault("global_allowlist", [])
+    if sender not in global_allowlist:
+        global_allowlist.append(sender)
+
+config_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+
 echo "Updated ${CONFIG_FILE}"

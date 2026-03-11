@@ -13,12 +13,13 @@ Option B (manual):
 2. Put it into `identities.json` as the channel `master_id` (edit manually or run `./scripts/init.sh`).
 3. Verify `identities.json` contains your `master_id`.
 
-If `identities.json` is missing, it will be auto-created from `identities.json.template` (or as an empty config). Unconfigured configs still deny all sensitive requests by default.
+If `identities.json` is missing, run `/identity-guard init` to create it from the template. Unconfigured configs still deny all sensitive requests by default.
 
 ## Files
 
 - `SKILL.md` - The rules and trigger logic
-- `identities.json` - Authorization config (required)
+- `identities.json` - Authorization config (required, created from template)
+- `identities.template.json` - Template for identities.json
 - `scripts/guard.sh` - Verification script used by the skill
 - `scripts/whoami.sh` - Best-effort sender ID discovery from recent sessions
 - `scripts/init.sh` - Interactive initialization for `identities.json`

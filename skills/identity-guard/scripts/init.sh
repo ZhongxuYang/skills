@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="${SCRIPT_DIR}/../identities.json"
+TEMPLATE_FILE="${SCRIPT_DIR}/../identities.template.json"
 
 prompt() {
   local label="$1"
@@ -23,44 +24,30 @@ fi
 
 if [[ -f "${CONFIG_FILE}" ]]; then
   cp "${CONFIG_FILE}" "${CONFIG_FILE}.bak.$(date +%Y%m%d-%H%M%S)"
+elif [[ -f "${TEMPLATE_FILE}" ]]; then
+  cp "${TEMPLATE_FILE}" "${CONFIG_FILE}"
+else
+  echo "Error: Template file not found: ${TEMPLATE_FILE}" >&2
+  exit 1
 fi
 
-if command -v jq >/dev/null 2>&1; then
-  TMP_FILE="$(mktemp)"
-  if [[ -f "${CONFIG_FILE}" ]]; then
-    jq --arg channel "${CHANNEL}" --arg sender "${SENDER_ID}" '
-      .channels = (.channels // {}) |
-      .channels[$channel] = (.channels[$channel] // {}) |
-      .channels[$channel].master_id = $sender |
-      .channels[$channel].allowlist = (.channels[$channel].allowlist // []) |
-      .global_allowlist = (.global_allowlist // [])
-    ' "${CONFIG_FILE}" > "${TMP_FILE}"
-  else
-    jq -n --arg channel "${CHANNEL}" --arg sender "${SENDER_ID}" '
-      {
-        channels: {
-          ($channel): {
-            master_id: $sender,
-            allowlist: []
-          }
-        },
-        global_allowlist: []
-      }
-    ' > "${TMP_FILE}"
-  fi
-  mv "${TMP_FILE}" "${CONFIG_FILE}"
+if grep -q "\"${CHANNEL}\"" "${CONFIG_FILE}"; then
+  sed -i.bak -E "/\"${CHANNEL}\"/,/\"allowlist\"/ s/\"master_id\": \"[^\"]*\"/\"master_id\": \"${SENDER_ID}\"/" "${CONFIG_FILE}"
+  rm -f "${CONFIG_FILE}.bak"
 else
-  cat > "${CONFIG_FILE}" <<EOF
-{
-  "channels": {
-    "${CHANNEL}": {
-      "master_id": "${SENDER_ID}",
-      "allowlist": []
+  TMP_FILE="$(mktemp)"
+  awk -v channel="${CHANNEL}" -v sender="${SENDER_ID}" '
+    /"channels": \{/ {
+      print
+      print "    \"" channel "\": {"
+      print "      \"master_id\": \"" sender "\","
+      print "      \"allowlist\": []"
+      print "    },"
+      next
     }
-  },
-  "global_allowlist": []
-}
-EOF
+    { print }
+  ' "${CONFIG_FILE}" > "${TMP_FILE}"
+  mv "${TMP_FILE}" "${CONFIG_FILE}"
 fi
 
 echo "Updated ${CONFIG_FILE}"

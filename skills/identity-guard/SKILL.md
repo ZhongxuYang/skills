@@ -42,10 +42,26 @@ If the user asks for their own ID (e.g., `/whoami`), return the `sender_id` from
 ## Helper Requests (Allowed Without Verification)
 
 These are safe to answer without identity verification:
-- `/whoami` or "what is my sender id" → Return the `sender_id` from the current message metadata.
+- `/identity-guard whoami` or "what is my sender id" → Return the `sender_id` from the current message metadata.
 - Setup guidance for configuring `identities.json` or running the helper scripts.
 
 If the conversation is a group chat, recommend running `/whoami` in DM or using `./scripts/whoami.sh` locally to avoid exposing IDs.
+
+## Conversational Setup (No CLI Required)
+
+The assistant may initialize `identities.json` via chat **only if**:
+- No `master_id` is configured for the channel yet, and
+- The request comes from a DM (not a group chat), and
+- `sender_id` is present in the current message metadata.
+
+Suggested flow:
+1. User sends `/identity-guard init` or "initialize identity guard".
+2. Assistant checks `identities.json`:
+   - If a `master_id` already exists for that channel, **refuse** and ask them to use the CLI or contact the admin.
+   - If missing, set `master_id` to the current `sender_id`.
+3. Confirm success and remind the user to avoid sharing IDs in group chats.
+
+If `/identity-guard init` is sent in a group chat, respond with a refusal and ask the user to run it in DM.
 
 ## How to Verify Identity
 
